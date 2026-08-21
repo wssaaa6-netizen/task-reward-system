@@ -78,6 +78,71 @@ async def initialize_admin_account():
         await StreakService.get_or_create_streak(admin_id)
         logger.info("Default Administrator initialized: %s", admin_email)
 
+async def ensure_default_catalog():
+    """Ensure baseline catalog (rewards, tasks, quizzes) exists if empty in production without deleting any existing data."""
+    db = get_database()
+    now = datetime.now(timezone.utc)
+
+    # 1. Rewards
+    rewards_count = await db.rewards.count_documents({})
+    if rewards_count == 0:
+        from seed import REWARDS_DATA
+        for rew_data in REWARDS_DATA:
+            r_id = str(uuid.uuid4())
+            doc = {
+                "_id": r_id,
+                **rew_data,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.rewards.insert_one(doc)
+        logger.info("Auto-seeded %d baseline rewards into catalog.", len(REWARDS_DATA))
+
+    # 2. Tasks
+    tasks_count = await db.tasks.count_documents({})
+    if tasks_count == 0:
+        from seed import TASKS_DATA
+        for task_data in TASKS_DATA:
+            t_id = str(uuid.uuid4())
+            doc = {
+                "_id": t_id,
+                **task_data,
+                "completions_count": 0,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.tasks.insert_one(doc)
+        logger.info("Auto-seeded %d baseline tasks into catalog.", len(TASKS_DATA))
+
+    # 3. Quizzes
+    quizzes_count = await db.quizzes.count_documents({})
+    if quizzes_count == 0:
+        from seed import QUIZZES_DATA
+        for quiz_data in QUIZZES_DATA:
+            q_id = str(uuid.uuid4())
+            processed_questions = []
+            for idx, q in enumerate(quiz_data["questions"]):
+                q_copy = dict(q)
+                q_copy["id"] = f"q_{idx+1}_{uuid.uuid4().hex[:6]}"
+                processed_questions.append(q_copy)
+            doc = {
+                "_id": q_id,
+                "title": quiz_data["title"],
+                "description": quiz_data["description"],
+                "category": quiz_data["category"],
+                "difficulty": quiz_data["difficulty"],
+                "duration_seconds": quiz_data["duration_seconds"],
+                "passing_score_percentage": quiz_data["passing_score_percentage"],
+                "questions": processed_questions,
+                "status": "ACTIVE",
+                "cover_image": None,
+                "attempts_count": 0,
+                "created_at": now,
+                "updated_at": now
+            }
+            await db.quizzes.insert_one(doc)
+        logger.info("Auto-seeded %d baseline quizzes into catalog.", len(QUIZZES_DATA))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -85,6 +150,7 @@ async def lifespan(app: FastAPI):
     await connect_to_mongo()
     await SettingsService.get_settings()
     await initialize_admin_account()
+    await ensure_default_catalog()
     yield
     # Shutdown
     await close_mongo_connection()
