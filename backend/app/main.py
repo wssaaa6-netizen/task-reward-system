@@ -123,7 +123,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
             "data": None,
             "error_code": f"HTTP_{exc.status_code}"
-        }
+        },
+        headers=exc.headers
     )
 
 @app.exception_handler(RequestValidationError)

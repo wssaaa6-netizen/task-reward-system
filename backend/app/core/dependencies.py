@@ -1,23 +1,26 @@
 import logging
 from typing import Optional
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.security import decode_token
 from app.database.mongodb import get_database
 from app.schemas.user import UserRole
 
 logger = logging.getLogger("task2cash.dependencies")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+security = HTTPBearer(auto_error=False, bearerFormat="JWT")
 
-async def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
-    if not token:
+async def get_current_user(
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> dict:
+    if not auth or not auth.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Please log in.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    token = auth.credentials
     payload = decode_token(token)
     if not payload or payload.get("type") != "access":
         raise HTTPException(
@@ -59,11 +62,13 @@ async def get_current_active_admin(current_user: dict = Depends(get_current_user
         )
     return current_user
 
-async def get_optional_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
-    if not token:
+async def get_optional_current_user(
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> Optional[dict]:
+    if not auth or not auth.credentials:
         return None
     try:
-        payload = decode_token(token)
+        payload = decode_token(auth.credentials)
         if not payload or payload.get("type") != "access":
             return None
         user_id = payload.get("sub")

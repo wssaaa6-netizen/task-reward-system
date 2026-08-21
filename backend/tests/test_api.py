@@ -367,3 +367,56 @@ async def test_daily_bonus_and_streak_upgrades(client: AsyncClient):
     assert summary.json()["data"]["daily_bonus_target"] == 3
     assert summary.json()["data"]["daily_bonus_points"] == 300
 
+@pytest.mark.asyncio
+async def test_openapi_security_scheme_and_bearer_auth(client: AsyncClient):
+    # 1. Verify OpenAPI schema configuration
+    openapi_res = await client.get("/api/openapi.json")
+    assert openapi_res.status_code == 200
+    openapi = openapi_res.json()
+    
+    security_schemes = openapi.get("components", {}).get("securitySchemes", {})
+    assert "HTTPBearer" in security_schemes
+    assert security_schemes["HTTPBearer"]["type"] == "http"
+    assert security_schemes["HTTPBearer"]["scheme"] == "bearer"
+    assert security_schemes["HTTPBearer"]["bearerFormat"] == "JWT"
+    assert "OAuth2PasswordBearer" not in security_schemes
+
+    # Verify protected routes specify the HTTPBearer security requirement
+    auth_me_schema = openapi["paths"]["/api/auth/me"]["get"]
+    assert auth_me_schema.get("security") == [{"HTTPBearer": []}]
+
+    # 2. Verify unauthorized request fails with 401
+    unauth_res = await client.get("/api/auth/me")
+    assert unauth_res.status_code == 401
+    assert unauth_res.headers.get("www-authenticate") == "Bearer"
+
+    # 3. Verify invalid token request fails with 401
+    invalid_res = await client.get("/api/auth/me", headers={"Authorization": "Bearer invalid.token.value"})
+    assert invalid_res.status_code == 401
+
+    # 4. Verify login via JSON and accessing /api/auth/me with Bearer token
+    email = f"swagger_auth_{uuid.uuid4().hex[:6]}@example.com"
+    reg_res = await client.post("/api/auth/register", json={
+        "full_name": "Swagger User",
+        "email": email,
+        "password": "Password@123",
+        "confirm_password": "Password@123"
+    })
+    assert reg_res.status_code == 200
+
+    login_res = await client.post("/api/auth/login", json={
+        "email": email,
+        "password": "Password@123"
+    })
+    assert login_res.status_code == 200
+    login_data = login_res.json()
+    assert login_data["success"] is True
+    access_token = login_data["data"]["access_token"]
+
+    me_res = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {access_token}"})
+    assert me_res.status_code == 200
+    me_data = me_res.json()
+    assert me_data["success"] is True
+    assert me_data["data"]["email"] == email
+
+
