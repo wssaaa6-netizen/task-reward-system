@@ -45,7 +45,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (!isAuthenticated || !token) return;
 
     // WebSocket real-time listener
-    const wsUrl = (import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api/ws') + `?token=${token}`;
+    const defaultWsUrl = 'wss://task-reward-system.onrender.com/api/ws';
+    const rawWsUrl = import.meta.env.VITE_WS_URL || defaultWsUrl;
+    const wsUrl = `${rawWsUrl}?token=${token}`;
     let socket: WebSocket | null = null;
     let reconnectTimeout: any = null;
 

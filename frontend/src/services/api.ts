@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const normalizeApiUrl = (url?: string) => {
+  if (!url) return 'https://task-reward-system.onrender.com/api';
+  const clean = url.replace(/\/+$/, '');
+  return clean.endsWith('/api') ? clean : `${clean}/api`;
+};
+
+const API_BASE_URL = normalizeApiUrl(import.meta.env.VITE_API_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
