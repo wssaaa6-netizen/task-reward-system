@@ -43,15 +43,23 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
-        "http://127.0.0.1:3000"
+        "http://127.0.0.1:3000",
+        "https://frontend-gray-five-63.vercel.app",
     ]
 
     @field_validator("CORS_ORIGINS", mode="before")
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",") if i.strip()]
+        if isinstance(v, str):
+            cleaned = v.strip()
+            if cleaned.startswith("[") and cleaned.endswith("]"):
+                cleaned = cleaned[1:-1]
+            return [
+                i.strip().strip("'\"").rstrip("/")
+                for i in cleaned.split(",")
+                if i.strip().strip("'\"")
+            ]
         elif isinstance(v, list):
-            return v
+            return [str(i).strip().strip("'\"").rstrip("/") for i in v if i]
         return ["*"]
 
 
